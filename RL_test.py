@@ -3,8 +3,7 @@ import numpy as np
 import random as rnd
 import tensorflow as tf
 
-grid_size = 10
-# domain = np.zeros((grid_size, grid_size), dtype = int) #  Not used at the moment
+grid_size = 4
 ACTIONS = ['Right', 'Left', 'Up', 'Down']
 # Initialize Action-Value function Q(s, a)
 # Q as 'cube' tensor or matrix maybe?
@@ -14,7 +13,7 @@ eps = 0.1
 gamma = 0.7
 alpha = 1 # Step size, does not need to be 1
 
-# Does not use RL at the moment
+# Does use RL at the moment
 
 class Robot:
     """Implements test robot for RL algorithm. """
@@ -42,29 +41,33 @@ def move_robot(robot, state):
     cur_state[m][n] = 0
     action = choose_action(state, p)
     if action == 'Right':
-        if n + 1 >= grid_size:
+        if n + 1 >= grid_size or cur_state[m][n+1] == 2:
             pass
         else:
             n += 1
         a = 0
+
     elif action == 'Left':
-        if n - 1 < 0:
+        if n - 1 < 0 or cur_state[m][n-1] == 2:
             pass
         else:
             n -= 1
         a = 1
+
     elif action == 'Up':
-        if m - 1 < 0:
+        if m - 1 < 0 or cur_state[m-1][n] == 2:
             pass
         else:
             m -= 1
         a = 2
+
     elif action == 'Down':
-        if m + 1 >= grid_size:
+        if m + 1 >= grid_size or cur_state[m+1][n] == 2:
             pass
         else:
             m += 1
         a = 3
+
     m = m % grid_size
     n = n % grid_size
     robot.m = m
@@ -74,8 +77,7 @@ def move_robot(robot, state):
 
 def choose_action(state, prob): # Given a state and a probability distribution, chooses an action!
     """Defines policy to follow."""
-    if state[-1][-1] != 1: # Robot is not at end point
-        action = np.random.choice(ACTIONS, p = prob) # Chooses an action at random
+    action = np.random.choice(ACTIONS, p = prob) # Chooses an action at random
     return action
 
 def episode():
@@ -84,27 +86,27 @@ def episode():
     # Initialize S
     S = np.zeros((grid_size, grid_size), dtype = int) # Initializes the state, S
     S[0][0] = 1 # Initializes position of robot
+    S[0][2] = 2 # Obstacle 1
+    S[2][1] = 2 # Obstacle 2
     r1 = Robot()
     count = 0
     while S[-1][-1] != 1:
-        R = -1
         m_old = r1.m
         n_old = r1.n
         S_new, action_number = move_robot(r1, S)
         m_new = r1.m
         n_new = r1.n
+        R = -1
         Q[m_old][n_old][action_number] += alpha*(R + gamma*max(Q[m_new][n_new] - Q[m_old][n_old][action_number]))
         S = S_new
         # print(S)
         # print()
         count += 1
-    else:
-        R = 1
     return count
 
 def simulation():
     """Iterates through all episodes."""
-    for i in range(500):
+    for i in range(100):
         nsteps = episode()
         print("End of episode!")
         print(nsteps)
