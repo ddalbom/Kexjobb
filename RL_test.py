@@ -3,68 +3,110 @@ import numpy as np
 import random as rnd
 import tensorflow as tf
 
-grid_size = 3
-domain = np.zeros((grid_size, grid_size), dtype = int)
-
+grid_size = 10
+# domain = np.zeros((grid_size, grid_size), dtype = int) #  Not used at the moment
 ACTIONS = ['Right', 'Left', 'Up', 'Down']
+# Initialize Action-Value function Q(s, a)
+# Q as 'cube' tensor or matrix maybe?
+Q = np.random.rand(grid_size, grid_size, len(ACTIONS))
+Q[-1][-1] = [0, 0, 0, 0]
+eps = 0.1
+gamma = 0.7
+alpha = 1 # Step size, does not need to be 1
 
 # Does not use RL at the moment
 
 class Robot:
     """Implements test robot for RL algorithm. """
-    def __init__(self, xpos = 0, ypos = 0):
-        self.x = xpos
-        self.y = ypos
+    def __init__(self, row = 0, col = 0):
+        self.m = row
+        self.n = col
         # self.carry ... # Maybe = True if it carries load?
         # self.vx/vy # Velocity maybe?
+        # Should maybe have the Q-function encoded
 
-def move_robot(robot):
+def move_robot(robot, state):
     """Moves the robot according to the given action."""
-    global domain
-    x = robot.x
-    y = robot.y
-    domain[x][y] = 0
-    p = [0.25, 0.25, 0.25, 0.25]
-    action = choose_action(domain, p)
+    global Q
+    m = robot.m
+    n = robot.n
+    p = []
+    for i in range(len(ACTIONS)):
+        p.append(eps/4)
+    Qmax = max(Q[m][n])
+    for i in range(len(p)):
+        if Q[m][n][i] == Qmax:
+            p[i] = 1 - eps + eps/4
+            break # Use if number of episodes is large
+    cur_state = state
+    cur_state[m][n] = 0
+    action = choose_action(state, p)
     if action == 'Right':
-        if x + 1 >= grid_size:
+        if n + 1 >= grid_size:
             pass
         else:
-            x += 1
+            n += 1
+        a = 0
     elif action == 'Left':
-        if x - 1 < 0:
+        if n - 1 < 0:
             pass
         else:
-            x -= 1
+            n -= 1
+        a = 1
     elif action == 'Up':
-        if y + 1 >= grid_size:
+        if m - 1 < 0:
             pass
         else:
-            y += 1
+            m -= 1
+        a = 2
     elif action == 'Down':
-        if y - 1 < 0:
+        if m + 1 >= grid_size:
             pass
         else:
-            y -= 1
-    x = x % grid_size
-    y = y % grid_size
-    robot.x = x
-    robot.y = y
-    domain[x][y] = 1
+            m += 1
+        a = 3
+    m = m % grid_size
+    n = n % grid_size
+    robot.m = m
+    robot.n = n
+    cur_state[m][n] = 1
+    return cur_state, a
 
-def choose_action(state, prob): # Given a state, what is the probability of performing action a?
+def choose_action(state, prob): # Given a state and a probability distribution, chooses an action!
     """Defines policy to follow."""
     if state[-1][-1] != 1: # Robot is not at end point
-        action = np.random.choice(ACTIONS, p = prob) # Choose an action at random
+        action = np.random.choice(ACTIONS, p = prob) # Chooses an action at random
     return action
 
-r1 = Robot() # Create a test robot
-count = 0 # Counts the number of steps taken
+def episode():
+    """Simulation of one episode."""
+    global Q
+    # Initialize S
+    S = np.zeros((grid_size, grid_size), dtype = int) # Initializes the state, S
+    S[0][0] = 1 # Initializes position of robot
+    r1 = Robot()
+    count = 0
+    while S[-1][-1] != 1:
+        R = -1
+        m_old = r1.m
+        n_old = r1.n
+        S_new, action_number = move_robot(r1, S)
+        m_new = r1.m
+        n_new = r1.n
+        Q[m_old][n_old][action_number] += alpha*(R + gamma*max(Q[m_new][n_new] - Q[m_old][n_old][action_number]))
+        S = S_new
+        # print(S)
+        # print()
+        count += 1
+    else:
+        R = 1
+    return count
 
-while domain[2][2] != 1: # Unless
-    move_robot(r1)
-    print(domain)
-    print([r1.x, r1.y])
-    count += 1
+def simulation():
+    """Iterates through all episodes."""
+    for i in range(500):
+        nsteps = episode()
+        print("End of episode!")
+        print(nsteps)
 
-print('Count = ', count)
+simulation()
