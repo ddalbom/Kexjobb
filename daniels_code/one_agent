@@ -1,0 +1,121 @@
+# Reinforcement learning
+import numpy as np
+import random as rnd
+
+grid_size = 4
+ACTIONS = ['Right', 'Left', 'Up', 'Down']
+eps = 0.1 # Greedy policy
+gamma = 0.9 # Discount factor
+alpha = 1 # Step size, does not need to be 1
+
+
+# Initialize Action-Value function Q(s, a)
+Q = np.random.rand(grid_size, grid_size, len(ACTIONS))
+Q[-1][-1] = [0, 0, 0, 0]
+
+
+"""Starting position and goal"""
+
+# Starting position for agent 1
+m_A = 0
+n_A = 0
+
+# Goal for agent 1
+m_B = grid_size - 1
+n_B = grid_size - 1
+
+class Agent:
+    """Implements test agent for RL algorithm. """
+    def __init__(self, row, col):
+        self.m = row
+        self.n = col
+
+
+def move_agent(agent, state):
+    """Moves the robot according to the given action."""
+    global Q
+    m = agent.m
+    n = agent.n
+    p = []   # Probability for each action in current state
+    for i in range(len(ACTIONS)):
+        p.append(eps/4)
+    Qmax = max(Q[m][n])  # Picks the action with highest Q-value in our current state
+    for i in range(len(p)):
+        if Q[m][n][i] == Qmax:
+            p[i] = 1 - eps + eps/4
+            break # Use when two actions got the same Q-value
+
+    state[m][n] = 0  # Remove our agent from its state
+
+    action = choose_action(state, p) # Choose an random action weighted with the actions probabilities
+    if action == 'Right':
+        if n + 1 >= grid_size:  # Checks if there is a wall to the right
+            pass
+        else:
+            n += 1 # make a step to the right
+        a = 0  # 0 represents Right
+
+    elif action == 'Left':
+        if n - 1 < 0: # Check if there is a wall to the left
+            pass
+        else:
+            n -= 1 # make a step to the left
+        a = 1 # 1 represents left
+
+    elif action == 'Up':
+        if m - 1 < 0: # Check if there is a wall above the agent
+            pass
+        else:
+            m -= 1 # make a step up
+        a = 2 # 2 represents up
+
+    elif action == 'Down':
+        if m + 1 >= grid_size: # Check if there is a wall under the agent
+            pass
+        else:
+            m += 1 # Make a step to down
+        a = 3 # 4 represents down
+    print("Action taken :",action)
+    agent.m = m # Updates the agent
+    agent.n = n
+    state[m][n] = 1 # Updates our agents position to the new stae
+    return state, a
+
+def choose_action(state, prob): # Given a state and a probability distribution, chooses an action!
+    """Defines policy to follow."""
+    action = np.random.choice(ACTIONS, p = prob) # Chooses an action at random
+    return action
+
+def episode():
+    """Simulation of one episode."""
+    global Q
+    # Initialize S
+    S = np.zeros((grid_size, grid_size), dtype = int) # Initializes the state, S
+    S[m_A][n_A] = 1 # Initializes position of agent 1
+    print(S)
+    print()
+
+    a1 = Agent(row=m_A,col=n_A)
+    count = 0
+    while S[-1][-1] != 1: # take a new step as long as the agent haven't reached goal
+        m_old = a1.m # Saves old state, used for the Q-learning algorithm
+        n_old = a1.n
+        S_new, action_number = move_agent(a1, S) # Agent 1 performs a move
+        m_new = a1.m # New state
+        n_new = a1.n
+        R = -1
+        Q[m_old][n_old][action_number] += alpha*(R + gamma*max(Q[m_new][n_new]) - Q[m_old][n_old][action_number]) # Q-learning algorithm, assigns a Q-value for the action we took
+        S = S_new # Updates state
+        print(S)
+        print()
+        count += 1
+    return count
+
+def simulation():
+    """Iterates through all episodes."""
+    for i in range(100):
+        nsteps = episode()
+        print("End of episode!")
+        print("number of steps :",nsteps)
+
+simulation()
