@@ -1,2 +1,3 @@
-# Kexjobb
-Kexjobb i deep reinforcement learning 
+# Bachelor's Degree Project
+Bachelor's degree project in Deep Reinforcement Learning.
+ 
