@@ -1,3 +1,3 @@
 # Bachelor's Degree Project
-Bachelor's degree project in Deep Reinforcement Learning.
+This repository contains all files used in our bachelor's degree project: *Distributed Optimization through Deep Reinforcement Learning*. 
  
