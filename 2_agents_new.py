@@ -10,10 +10,6 @@ from copy import deepcopy
 print('Running')
 
 grid_size = 4
-m_A = 0 # Start coordinate
-n_A = 0 # End coordinate
-m_B = grid_size - 1 # End coordinate
-n_B = grid_size - 1 # End coordinate
 ACTIONS = ['Right', 'Left', 'Up', 'Down']
 eps = 0.1
 gamma = 0.7
@@ -55,17 +51,9 @@ class Robot:
         if [m, n] == [self.end]:
             pass
         else:
-            p = [] # Probability distribution
-            for i in range(len(ACTIONS)):
-                p.append(eps/4)
-            Qmax = max(self.Q[state])
-            for i in range(len(p)):
-                if self.Q[state][i] == Qmax:
-                    p[i] = 1 - eps + eps/4
-                    break # Use if number of episodes is large
             cur_env = deepcopy(state.grid)
             cur_env[m][n] = 0
-            action = choose_action(p)
+            action = self.choose_action(state)
             if action == 'Right':
                 if n + 1 >= grid_size or cur_env[m][n+1] == 1:
                     Rew = -5 # Reward -5 if we move into wall or another agent
@@ -104,10 +92,18 @@ class Robot:
                 self.Q[new_state] = np.random.rand(len(ACTIONS))
             return new_state, a, Rew
 
-def choose_action(prob): # Given a probability distribution, chooses an action!
-    """Defines policy to follow."""
-    action = np.random.choice(ACTIONS, p = prob) # Chooses an action at random
-    return action
+    def choose_action(self, state): # Given a probability distribution, chooses an action!
+        """Defines behavior policy as epsilon-greedy. Given a state, chooses an action."""
+        prob = [] # Probability distribution
+        for i in range(len(ACTIONS)):
+            prob.append(eps/4)
+        Qmax = max(self.Q[state])
+        for i in range(len(prob)):
+            if self.Q[state][i] == Qmax:
+                prob[i] = 1 - eps + eps/4
+                break # Use if number of episodes is large
+        action = np.random.choice(ACTIONS, p = prob) # Chooses an action at random
+        return action
 
 def epi(robots):
     """Simulation of one episode for multiple robots."""
