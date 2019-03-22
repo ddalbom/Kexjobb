@@ -95,13 +95,14 @@ class Robot:
             cur_env[m][n] = 1 # Update grid
             new_state = State(cur_env, [m, n]) # Set new state
 
-            if [m, n] == self.pickup and not self.carry: # If point pickup point is reached
+            if [m, n] == self.pickup and not self.carry: # If pickup point is reached
                 self.carry = True # Pick up cargo
                 self.Q2[state] = np.random.rand(len(ACTIONS))
                 # Reward for picking up cargo?
 
             if [m, n] == self.dropoff and self.carry: # If dropoff point is reached
                 Rew = 10
+                self.Q2[new_state] = [0, 0, 0, 0] # Terminal state is reached
 
             if not self.carry:
                 if new_state not in self.Q:
@@ -115,7 +116,7 @@ class Robot:
 
             return new_state, a, Rew, step, back
 
-    def choose_action(self, state): # Given a probability distribution, chooses an action!
+    def choose_action(self, state): # Given a state, chooses an action
         """Defines behavior policy as epsilon-greedy. Given a state, chooses an action."""
         prob = [] # Probability distribution
         for i in range(len(ACTIONS)):
@@ -125,7 +126,7 @@ class Robot:
             for i in range(len(prob)):
                 if self.Q[state][i] == Qmax:
                     prob[i] = 1 - eps + eps/4
-                    break # Use if number of episodes is large
+                    break # Use if number of episodes is large # NOTE: Always picks first maximum, if two paths are eqaul ...
         elif self.carry:
             Qmax = max(self.Q2[state])
             for i in range(len(prob)):
@@ -138,6 +139,7 @@ class Robot:
 def iterate(robots, E):
     """Performs one iteration, i.e. simulation of one time step."""
     terminal_list = []
+    rewards = []
     steps = []
     for robot in robots:
         S = State(E, [robot.m, robot.n])
@@ -197,14 +199,15 @@ def simulation():
     """Iterates through all episodes."""
     nepisodes = []
     # Initialize robots
-    robots = [] # List of all robots
+    robots = [] # List containing all robots
     r1 = Robot(dropoff = [0, 0], pickup = [grid_size-1, grid_size-1]) # Create robot
     r2 = Robot(dropoff = [0, grid_size-1], pickup = [grid_size-1, 0]) # Create robot
     robots.append(r1)
     robots.append(r2)
     steps_list = [[] for robot in range(len(robots))] # Store steps taken each episode for all robots
+    rew_list = [[[] for robot in range(len(robots))]]
     for i in range(1000): # Choose number of episodes to run
-        nsteps = episode(robots) # Number of steps
+        nsteps = episode(robots) # Number of steps and total reward
         nepisodes.append(i+1) # Episode number
         print('End of episode! Number of steps: ', nsteps)
         print('End of episode!')
@@ -213,5 +216,6 @@ def simulation():
     for list in steps_list:
         plt.plot(nepisodes, list, '.')
     plt.show()
+
 
 simulation() # Run one simulation
