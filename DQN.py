@@ -16,11 +16,14 @@ from copy import deepcopy
 import seaborn as sns
 
 
-grid_size = 5
+grid_size = 10
 ACTIONS = ['Right', 'Left', 'Up', 'Down']
 gamma = 0.9 # Discount factor
 alpha = 0.01 # Learning rate
 batch_size = 32 # Size of training sample
+nepisodes = 1000 # Number of episode
+initial_exploration_rate = 0.9 # Initial exploration rate for all agent
+
 
 episode_list = []
 
@@ -53,7 +56,7 @@ class Agent:
         self.reward = 0
         self.memory  = deque(maxlen=2000) # Memory for storing experiences, maximum capacity 2000
         self.model = self.build_model() # Create a neural network for each agent
-        self.eps = 0.9 # 90% at start, decrease after episode instead of after step
+        self.eps = initial_exploration_rate
         self.eps_min = 0.01
         self.eps_decay = 0.995
 
@@ -71,7 +74,9 @@ class Agent:
         model.compile(loss = 'mse', optimizer = RMSprop(lr = alpha))
 
         '''Convolutional layer WIP'''
-        #model.add(Conv2D(32, kernel_size=(5,5), strides=(1,1), activation='relu',input_shape= grid_size**2+2))
+        #model.add(Conv2D(32, kernel_size=(5,5), strides=(1,1), activation='relu',input_shape=(grid_size**2+2)
+
+
 
         return model
 
@@ -96,7 +101,7 @@ class Agent:
 
         if self.eps > self.eps_min:
             self.eps *= self.eps_decay
-            print('Exploration rate for agent {}'.format(self.nr),self.eps)
+            #print('Exploration rate for agent {}'.format(self.nr),self.eps)
 
 
     def move_agent(self, state):
@@ -164,6 +169,13 @@ class Agent:
         action = np.random.choice(ACTIONS, p = prob)
         return action
 
+    def load(self, name):
+        self.model.load_weights(name)
+
+    def save(self, name):
+        self.model.save_weights(name)
+
+
 def iterate(agents, E):
     """Performs one iteration, i.e. simulation of one time step."""
     terminal_list = []
@@ -174,7 +186,7 @@ def iterate(agents, E):
             S_new, action_number, r, terminal = agent.move_agent(S) # Moves agent
 
             agent.steps += 1
-            print('steps for agent {}: '.format(agent.nr),agent.steps)
+            #print('steps for agent {}: '.format(agent.nr),agent.steps)
 
             agent.reward += r
 
@@ -190,14 +202,14 @@ def iterate(agents, E):
                 batch = sample_batch(agent.memory, batch_size)
                 agent.train_network(batch)
             terminal_list.append(terminal)
-            print()
+            #print()
 
-    # Use if you dont want animation for the first episodes (can take a lot of time)
-    # if len(episode_list) >= 10:
-    #     show(E)
+    '''Use if you dont want animation for the first episodes (can take a lot of time)'''
+    #if len(episode_list) >= 50:
+        #show(E)
 
-    # Always displays the enivironment
-    show(E)
+    '''Always displays the enivironment'''
+    #show(E)
 
     terminal = np.all(terminal_list) # Only returns true when all agents has reached their goal
 
@@ -206,7 +218,6 @@ def iterate(agents, E):
 
 def episode(agents):
     """Simulation of one episode for multiple agents."""
-    # Initialize E
     E = np.zeros((grid_size, grid_size), dtype = int) # Environment, i.e. the grid
     for agent in agents:
         agent.m = agent.start[0] # Initialize robot position
@@ -215,18 +226,24 @@ def episode(agents):
         agent.steps = 0 # Initialize number of steps taken during episode
         agent.reward = 0
 
-    # Adds some obtacles
-    # E[1][1] = 2
-    # E[2][1] = 2
-    # E[2][3] = 2
-    # E[3][3] = 2
+    '''Adds some obtacles'''
+    E[1][2] = 2
+    E[1][3] = 2
+    E[3][6] = 2
+    E[3][7] = 2
+    E[4][2] = 2
+    E[5][2] = 2
+    E[6][6] = 2
+    E[7][6] = 2
+    E[8][2] = 2
+    E[8][3] = 2
 
-    # Use if you dont want animation for the first episodes (can take a lot of time for large grids and many agents)
-    # if len(episode_list) >= 10:
+    '''Use if you dont want animation for the first episodes (can take a lot of time for large grids and many agents)'''
+    # if len(episode_list) >= 50:
     #     show(E)
 
-    # Always displays the enivironment
-    show(E)
+    '''Always displays the enivironment'''
+    #show(E)
 
     terminal = False # Terminal state has not been reached
 
@@ -242,16 +259,20 @@ def simulation():
     agents = [] # List containing all agents
     a1 = Agent(start = [0, 0], end = [grid_size-1, grid_size-1], nr=1) # Create agent 1
     a2 = Agent(start = [0, grid_size-1], end = [grid_size-1, 0], nr=2) # Create agent 2
-    #a3 = Agent(start = [grid_size-1, 0], end = [0, grid_size-1], nr=3) # Create agent 3
-    #a4 = Agent(start = [grid_size-1, grid_size-1], end = [0, 0], nr=4) # Create agent 4
+    a3 = Agent(start = [grid_size-1, 0], end = [0, grid_size-1], nr=3) # Create agent 3
+    a4 = Agent(start = [grid_size-1, grid_size-1], end = [0, 0], nr=4) # Create agent 4
     agents.append(a1)
     agents.append(a2)
-    #agents.append(a3)
-    #agents.append(a4)
+    agents.append(a3)
+    agents.append(a4)
+
+    '''load weights'''
+    # for agent in agents:
+    #     agent.load("./save/agent{}-dqn.h5".format(agent.nr))
 
     reward_list = [[] for i in range(len(agents))]
 
-    for i in range(10): # Choose number of episodes to run
+    for i in range(nepisodes): # Choose number of episodes to run
         episode(agents) # Run one episode
         episode_list.append(i+1) # Episode number
         print('End of episode ', i+1)
@@ -259,24 +280,20 @@ def simulation():
         for agent in agents:
             reward_list[agent.nr-1].append(agent.reward)
 
-    # Use if you want to decrease epsilon after episode instead of after a step
-        # for agent in agents:
-        #     if agent.eps > agent.eps_min:
-        #         agent.eps *= agent.eps_decay
-
-
-
     '''Plots the results'''
     plt.clf() # Removes animation window
     sns.set()
-    agent_nr = 1
     for list in reward_list:
-        plt.plot(episode_list, list, label = 'Agent {}'.format(agent_nr))
-        agent_nr += 1
+        plt.plot(episode_list, list, label = 'Agent {}'.format(agent.nr))
     plt.xlabel('Episode')
     plt.ylabel('Cumulative reward')
     plt.legend()
     plt.show()
+
+    '''saves weights'''
+    # for agent in agents:
+    #     agent.save("./save/agent{}-dqn.h5".format(agent.nr))
+
 
 def process_state(state):
     """Pre-process state by converting it into an array which can be passed to network."""
