@@ -4,18 +4,21 @@
 
 import numpy as np
 import random as rnd
+import matplotlib
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Conv2D, Flatten
-from keras.optimizers import Adam
+from keras.optimizers import Adam, RMSprop
 from collections import deque
 from copy import deepcopy
+import seaborn as sns
+import pickle
 
-grid_size = 6
+grid_size = 10
 ACTIONS = ['Right', 'Left', 'Up', 'Down']
-eps = 1 # Initial exploration rate
-eps_min = 0.01 # Minimum exploration rate
+eps = 0.9 # Initial exploration rate
+eps_min = 0.001 # Minimum exploration rate
 eps_decay = 0.995 # Decrease chance of exploration by this factor after each "training session"
 gamma = 0.9 # Discount factor
 alpha = 0.001 # Learning rate
@@ -61,13 +64,15 @@ def sample_batch(memory, n):
 class Agent:
     """Defines the agent."""
     global eps, eps_min, eps_decay
-    def __init__(self, start, end):
+    def __init__(self, start, end, nr):
         self.m = start[0]
         self.n = start[1]
         self.start = start
         self.end = end
         self.steps = 0
         self.reward = 0
+        self.collisions = 0
+        self.nr = nr
         self.epsilon = eps
         self.eps_min = eps_min
         self.eps_decay = eps_decay
@@ -82,7 +87,7 @@ class Agent:
         model.add(Dense(24, input_dim = grid_size*grid_size+2, activation = 'relu'))
         model.add(Dense(24, activation = 'relu'))
         model.add(Dense(len(ACTIONS), activation = 'linear'))
-        model.compile(loss = 'mse', optimizer = Adam(lr = alpha))
+        model.compile(loss = 'mse', optimizer = RMSprop(lr = alpha))
 
         return model
 
@@ -101,7 +106,7 @@ class Agent:
         """Update raget network using the weights of policy network."""
         self.target.set_weights(self.policy.get_weights()) # Update weights of target network with weights of policy network
 
-    def train_network(self, batch):
+    def train_network(self, batch, episode_nr):
         """Train the neural network using sampled batch of experiences from replay memory."""
         global eps, eps_min, eps_decay
         for exp in batch:
@@ -121,8 +126,8 @@ class Agent:
 
             target_f[0][action_number] = target # Update something???
             self.policy.fit(S, target_f, epochs=1, verbose=0) # Train network # Verbose - makes training line?
-        if self.epsilon > self.eps_min: # Decrease exploration rate
-            self.epsilon *= self.eps_decay
+        if self.epsilon > self.eps_min and episode_nr > 10:
+            self.epsilon *= self.eps_decay # Decrease exploration rate
 
     def move_agent(self, state):
         """Move agent one step."""
@@ -134,32 +139,36 @@ class Agent:
         action = self.choose_action(state)
 
         if action == 'Right':
-            if n + 1 >= grid_size or cur_env[m][n+1] == 1:
-                Rew = -5 # Reward -5 if we move into wall or another agent
+            if n + 1 >= grid_size or cur_env[m][n+1] != 0:
+                Rew = -2 # Reward -5 if we move into wall or another agent
+                self.collisions += 1
             else:
                 n += 1
-                Rew = -1 # Reward -1 otherwise
+                Rew = -0.1 # Reward -1 otherwise
             a = 0 # Action number
         elif action == 'Left':
-            if n - 1 < 0 or cur_env[m][n-1] == 1:
-                Rew = -5
+            if n - 1 < 0 or cur_env[m][n-1] != 0:
+                Rew = -2
+                self.collisions += 1
             else:
                 n -= 1
-                Rew = -1
+                Rew = -0.1
             a = 1
         elif action == 'Up':
-            if m - 1 < 0 or cur_env[m-1][n] == 1:
-                Rew = -5
+            if m - 1 < 0 or cur_env[m-1][n] != 0:
+                Rew = -2
+                self.collisions += 1
             else:
                 m -= 1
-                Rew = -1
+                Rew = -0.1
             a = 2
         elif action == 'Down':
-            if m + 1 >= grid_size or cur_env[m+1][n] == 1:
-                Rew = -5
+            if m + 1 >= grid_size or cur_env[m+1][n] != 0:
+                Rew = -2
+                self.collisions += 1
             else:
                 m += 1
-                Rew = -1
+                Rew = -0.1
             a = 3
 
         m = m % grid_size
@@ -183,20 +192,23 @@ class Agent:
         for i in range(len(ACTIONS)):
             prob.append(self.epsilon/4)
         Q_func = self.policy.predict(process_state(state))
-        Q_vals = Q_func[0] # Ugly fix :(
-        # print('Q-values are: ', Q_vals)
+        Q_vals = Q_func[0]
+        max_index = []
         Qmax = np.amax(Q_vals)
         for i in range(len(prob)):
             if Q_vals[i] == Qmax:
+                # max_index.append(i)
                 prob[i] = 1 - self.epsilon + self.epsilon/4
                 break
+        # ind = np.random.choice(max_index)
+        # prob[ind] = 1 - self.epsilon + self.epsilon/4
         action = np.random.choice(ACTIONS, p = prob)
         return action
 
-def iterate(agents, E, t):
+def iterate(agents, E, t, episode_nr):
     """Performs one iteration, i.e. simulation of one time step."""
     global batch_size
-    print('I am inside one time step!')
+    # print('I am inside one time step!')
     terminal_list = []
     for agent in agents:
         S = State(E, [agent.m, agent.n])
@@ -214,27 +226,44 @@ def iterate(agents, E, t):
 
             if len(agent.memory) > batch_size:
                 batch = sample_batch(agent.memory, batch_size)
-                agent.train_network(batch)
+                agent.train_network(batch, episode_nr)
 
             terminal_list.append(terminal)
 
-            if t % 50 == 0:
+            if t % 50 == 0: # Choose time interval for updating target network weights
                 agent.update_target_network()
 
         # print(E) # Show grid
         # print()
+
+    # if episode_nr > 5:
+        # show_grid(E, episode_nr)
+
+    # show_grid(E, episode_nr)
 
     terminal = np.all(terminal_list) # True if all agents have reached destination
     env_list.append(E)
 
     return E, terminal
 
-def episode(agents, t):
+def episode(agents, t, episode_nr):
     """Simulation of one episode for multiple agents."""
     # Initialize E
-    print('I am inside the episode')
     E = np.zeros((grid_size, grid_size), dtype = int) # Environment, i.e. the grid
+
+    E[0][3] = 2 # Use for 10x10 grid
+    E[1][3] = 2
+    E[0][6] = 2
+    E[1][6] = 2
+    E[2][6] = 2
+    E[7][3] = 2
+    E[8][3] = 2
+    E[9][3] = 2
+    E[8][6] = 2
+    E[9][6] = 2
+
     env_list.append(E)
+
     for agent in agents:
         agent.m = agent.start[0] # Initialize robot position
         agent.n = agent.start[1] # Initialize robot position
@@ -242,67 +271,68 @@ def episode(agents, t):
         agent.carry = False # Initialize robot carry, i.e. the robot does NOT carry cargo
         agent.steps = 0 # Initialize number of steps taken during episode
         agent.reward = 0 # Do not reset if we should plot accumulated over all episodes
+        agent.collisions = 0 # Reset number of collisions
 
     terminal = False # Terminal state has not been reached
 
     while not terminal: # While agents have not reached their terminal state
-        E, terminal = iterate(agents, E, t)
+        E, terminal = iterate(agents, E, t, episode_nr)
         t += 1
-
-    print('I am done with the episode')
-
     return t
 
 
 def simulation(nepisodes):
-    """Iterates through all episodes."""
+    """Iterate through all episodes."""
     # Initialize robots
-    print('I am inside the simulation')
+    # print('I am inside the simulation')
     agents = [] # List containing all robots
-    a1 = Agent(start = [0, 0], end = [grid_size-1, grid_size-1]) # Create agent 1
-    a2 = Agent(start = [0, grid_size-1], end = [grid_size-1, 0]) # Create agent 2
-    a3 = Agent(start = [grid_size-1, 0], end = [0, grid_size-1]) # Create agent 3
-    a4 = Agent(start = [grid_size-1, grid_size-1], end = [0, 0]) # Create agent 4
+    a1 = Agent(start = [0, 0], end = [grid_size-1, grid_size-1], nr = 1) # Create agent 1
+    a2 = Agent(start = [0, grid_size-1], end = [grid_size-1, 0], nr = 2) # Create agent 2
+    a3 = Agent(start = [grid_size-1, 0], end = [0, grid_size-1], nr = 3) # Create agent 3
+    a4 = Agent(start = [grid_size-1, grid_size-1], end = [0, 0], nr = 4) # Create agent 4
     agents.append(a1)
-    # agents.append(a2)
-    # agents.append(a3)
-    # agents.append(a4)
+    agents.append(a2)
+    agents.append(a3)
+    agents.append(a4)
 
-    episode_list = []
     steps_list = [[] for i in range(len(agents))]
     reward_list = [[] for i in range(len(agents))]
+    cumulative_rewards = [[] for i in range(len(agents))]
+    collisions_list = [[] for i in range(len(agents))]
 
     t = 0 # Set time to zero
-    for i in range(nepisodes): # Choose number of episodes to run
-        print('I am inside the loop')
-        t = episode(agents, t) # Run one episode
-        # print(t)
+    for i in range(nepisodes):
+        t = episode(agents, t, i+1) # Run one episode
 
-        episode_list.append(i+1) # Episode number
         print('End of episode ', i+1)
         agent_index = 0
         for agent in agents:
             steps_list[agent_index].append(agent.steps)
             reward_list[agent_index].append(agent.reward)
+            collisions_list[agent_index].append(agent.collisions)
+            if i == 0:
+                cumulative_rewards[agent_index].append(agent.reward)
+            else:
+                cumulative_rewards[agent_index].append(agent.reward + cumulative_rewards[agent_index][i-1])
             agent_index += 1
 
-    return steps_list, reward_list
+    return steps_list, reward_list, collisions_list, cumulative_rewards
 
-    # for list in steps_list:
-    #     plt.plot(episode_list, list, '.', label = 'Number of steps taken for each episode')
-    # plt.xlabel('Episode')
-    # plt.ylabel('Number of steps')
-    # plt.legend()
-    # plt.show()
-    # for list in reward_list:
-    #     plt.plot(episode_list, list, label = 'Total reward of each episode')
-    # plt.xlabel('Episode')
-    # plt.ylabel('Total reward')
-    # plt.legend()
-    # plt.show()
+def show_grid(frame, episode_nr):
+    """Animate movement on grid as simulation runs."""
+    plt.grid('on')
+    ax = plt.gca()
+    ax.set_xticks(np.arange(0.5, 10, 1))
+    ax.set_yticks(np.arange(0.5, 10, 1))
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.imshow(frame, cmap='binary')
+    ax.set_title("Episode {}".format(episode_nr))
+    plt.pause(0.01)
+    plt.clf()
 
 def animate(frames):
-    """Animate movement on grid."""
+    """Animate movement on grid after performing the simulation."""
     plt.grid('on')
     ax = plt.gca()
     ax.set_xticks(np.arange(0.5, 10, 1))
@@ -312,47 +342,103 @@ def animate(frames):
 
     for i in range(len(env_list)):
         ax.imshow(env_list[i],cmap='binary')
-        ax.set_title("Steps {}".format(i+1))
         plt.pause(0.05)
-
-
-# simulation(200) # Run the simulation
-# print(len(env_list))
-# animate(env_list)
 
 def run_simulations():
     """Run multiple simulations."""
-    nepisodes = 20 # Number of episodes in each simulation
-    nsims = 10 # Number of simulations to run
-    nagents = 4
+    nepisodes = 2000 # Number of episodes in each simulation
+    nsims = 1 # Number of simulations to run
+    nagents = 4 # Need to set the agents in simulation() as well
 
-    total_rewards = [[] for i in range(nagents)] # Average rewards over all simulations
-    total_steps = [[] for i in range(nagents)] # Average steps over all simulations
+    # Total summed over all simulations; before averaging
+    total_rewards = [[0 for j in range(nepisodes)] for i in range(nagents)]
+    total_cum_rew = [[0 for j in range(nepisodes)] for i in range(nagents)]
+    total_steps = [[0 for j in range(nepisodes)] for i in range(nagents)]
+    total_collisions = [[0 for j in range(nepisodes)] for i in range(nagents)]
     episode_list = [i+1 for i in range(nepisodes)]
 
-    print('I am here')
-
     for sim in range(nsims):
-         steps_list, reward_list = simulation(nepisodes)
+         print('Simulation', sim+1)
+         steps_list, reward_list, collisions_list, cumulative_rewards = simulation(nepisodes)
          for agent in range(nagents):
              for ep in range(nepisodes):
                  total_rewards[agent][ep] += reward_list[agent][ep]
                  total_steps[agent][ep] += steps_list[agent][ep]
+                 total_collisions[agent][ep] += collisions_list[agent][ep]
+                 total_cum_rew[agent][ep] += cumulative_rewards[agent][ep]
 
     ave_rew = np.array(total_rewards, dtype = 'f')/nsims
     ave_steps = np.array(total_steps, dtype = 'f')/nsims
+    ave_cols = np.array(total_collisions, dtype = 'f')/nsims
+    ave_cum_rew = np.array(total_collisions, dtype = 'f')/nsims
 
+    # print('Print totals over all episodes')
+    # print('Reward: ', total_rewards)
+    # print('Cumulative reward: ', total_cum_rew)
+    # print('Steps: ', total_steps)
+    # print('collisions: ', total_collisions)
+    # print()
+    # print('Averages')
+    # print('Reward: ', ave_rew)
+    # print('Cumulative reward: ', ave_cum_rew)
+    # print('Steps: ', ave_steps)
+    # print('Collisions: ', ave_cols)
+
+    with open('average_reward_4_agents_2000_{}'.format(nsims),'wb') as f:
+        pickle.dump(ave_rew,f)
+
+    with open('average_steps_4_agents_2000_{}'.format(nsims), 'wb') as f:
+        pickle.dump(ave_steps, f)
+
+    with open('average_cols_4_agents_2000_{}'.format(nsims), 'wb') as f:
+        pickle.dump(ave_cols, f)
+
+    with open('average_cum_rew_4_agents_2000_{}'.format(nsims), 'wb') as f:
+        pickle.dump(ave_cum_rew, f)
+
+
+    sns.set()
+    matplotlib.rc('xtick', labelsize=25)
+    matplotlib.rc('ytick', labelsize=25)
+    plt.rc('axes', titlesize=40)
+    plt.rc('axes', labelsize=40)
+    plt.rc('legend', fontsize=20)
+
+    k = 1
     for list in ave_steps:
-        plt.plot(episode_list, list, '.', label = 'Number of steps taken for each episode')
+        plt.plot(episode_list, list, '.', label = 'Agent {}'.format(k))
+        k +=1
     plt.xlabel('Episode')
     plt.ylabel('Number of steps')
     plt.legend()
     plt.show()
+    k = 1
     for list in ave_rew:
-        plt.plot(episode_list, list, label = 'Total reward of each episode')
+        plt.plot(episode_list, list, label = 'Agent {}'.format(k))
+        k += 1
     plt.xlabel('Episode')
-    plt.ylabel('Total reward')
+    plt.ylabel('Reward')
+    plt.legend()
+    plt.show()
+    k = 1
+    for list in ave_cols:
+        plt.plot(episode_list, list, '.', label = 'Agent {}'.format(k))
+        k += 1
+    plt.xlabel('Episode')
+    plt.ylabel('Number of collisions')
+    plt.legend()
+    plt.show()
+    k = 1
+    for list in ave_cum_rew:
+        plt.plot(episode_list, list, label = 'Agent {}'.format(k))
+        k += 1
+    plt.xlabel('Episode')
+    plt.ylabel('Cumulative reward')
     plt.legend()
     plt.show()
 
-run_simulations()
+
+run_simulations() # Run multiple simulations and average
+
+# simulation(100) # Run one simulation
+# animate(env_list) # Animate single simulation
