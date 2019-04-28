@@ -205,6 +205,22 @@ class Agent:
         action = np.random.choice(ACTIONS, p = prob)
         return action
 
+    def load_policy(self, name):
+        """Load policy weights."""
+        self.policy.load_weights(name)
+
+    def save_policy(self, name):
+        """Save policy weights."""
+        self.policy.save_weights(name)
+
+    def load_target(self, name):
+        """Load target weights."""
+        self.target.load_weights(name)
+
+    def save_target(self, name):
+        """Save policy weights."""
+        self.target.save_weights(name)
+
 def iterate(agents, E, t, episode_nr):
     """Performs one iteration, i.e. simulation of one time step."""
     global batch_size
@@ -246,6 +262,7 @@ def iterate(agents, E, t, episode_nr):
 
     return E, terminal
 
+
 def episode(agents, t, episode_nr):
     """Simulation of one episode for multiple agents."""
     # Initialize E
@@ -272,12 +289,16 @@ def episode(agents, t, episode_nr):
         agent.steps = 0 # Initialize number of steps taken during episode
         agent.reward = 0 # Do not reset if we should plot accumulated over all episodes
         agent.collisions = 0 # Reset number of collisions
+        if episode_nr % 100 == 0:
+            agent.save_target('target_weights_{}.h5'.format(agent.nr))
+            agent.save_policy('policy_weights_{}.h5'.format(agent.nr))
 
     terminal = False # Terminal state has not been reached
 
     while not terminal: # While agents have not reached their terminal state
         E, terminal = iterate(agents, E, t, episode_nr)
         t += 1
+
     return t
 
 
@@ -294,6 +315,11 @@ def simulation(nepisodes):
     agents.append(a2)
     agents.append(a3)
     agents.append(a4)
+
+    # for agent in agents:
+    #     agent.load_target('target_weights_{}.h5'.format(agent.nr))
+    #     agent.load_policy('policy_weights_{}.h5'.format(agent.nr))
+    #     print('loaded')
 
     steps_list = [[] for i in range(len(agents))]
     reward_list = [[] for i in range(len(agents))]
@@ -315,6 +341,17 @@ def simulation(nepisodes):
             else:
                 cumulative_rewards[agent_index].append(agent.reward + cumulative_rewards[agent_index][i-1])
             agent_index += 1
+
+        if i % 1000 == 0:
+            with open('reward_4_agents_{}'.format(i),'wb') as f:
+                pickle.dump(reward_list,f)
+
+            with open('steps_4_agents_{}'.format(i), 'wb') as f:
+                pickle.dump(steps_list, f)
+
+            with open('cols_4_agents_{}'.format(i), 'wb') as f:
+                pickle.dump(collisions_list, f)
+
 
     return steps_list, reward_list, collisions_list, cumulative_rewards
 
@@ -346,7 +383,7 @@ def animate(frames):
 
 def run_simulations():
     """Run multiple simulations."""
-    nepisodes = 2000 # Number of episodes in each simulation
+    nepisodes = 10000 # Number of episodes in each simulation
     nsims = 1 # Number of simulations to run
     nagents = 4 # Need to set the agents in simulation() as well
 
@@ -384,16 +421,16 @@ def run_simulations():
     # print('Steps: ', ave_steps)
     # print('Collisions: ', ave_cols)
 
-    with open('average_reward_4_agents_2000_{}'.format(nsims),'wb') as f:
+    with open('average_reward_4_agents_10000_{}'.format(nsims),'wb') as f:
         pickle.dump(ave_rew,f)
 
-    with open('average_steps_4_agents_2000_{}'.format(nsims), 'wb') as f:
+    with open('average_steps_4_agents_10000_{}'.format(nsims), 'wb') as f:
         pickle.dump(ave_steps, f)
 
-    with open('average_cols_4_agents_2000_{}'.format(nsims), 'wb') as f:
+    with open('average_cols_4_agents_10000_{}'.format(nsims), 'wb') as f:
         pickle.dump(ave_cols, f)
 
-    with open('average_cum_rew_4_agents_2000_{}'.format(nsims), 'wb') as f:
+    with open('average_cum_rew_4_agents_10000_{}'.format(nsims), 'wb') as f:
         pickle.dump(ave_cum_rew, f)
 
 
